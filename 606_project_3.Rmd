@@ -1,0 +1,472 @@
+---
+title: "Project Notebook 3"
+output: html_notebook
+---
+ 
+
+```{r}
+library(readr)
+library(regclass)
+library(MASS)
+library(ISLR)
+library(klaR)
+library(tree)
+library(VGAM)
+library(ggplot2)
+library(caret)
+library(ROSE)
+library(Rfast)
+library(nnet)
+library(vcdExtra)
+library(energy)
+library(car)
+library(QuantPsyc)
+```
+
+```{r}
+banking_marketing_dataset <- read_csv("banking_marketing_dataset.csv")
+```
+
+Functions to create train-test split
+```{r}
+#original split
+  set.seed(1)
+  idx=sample(dim(banking_marketing_dataset)[1],round(nrow(banking_marketing_dataset)*0.75,0))
+  Train1=banking_marketing_dataset[idx,]
+  Test1=banking_marketing_dataset[-idx,]
+```
+
+```{r}
+table_1 = as.table(table(Train1$y))
+prop.table(table_1)
+```
+
+Undersampling split
+```{r}
+undersampling_df<- ovun.sample(y ~ ., data = banking_marketing_dataset, method = "under", p = 0.5, seed = 1)$data
+```
+
+```{r}
+dim(undersampling_df)
+```
+
+
+```{r}
+#undersample split
+  set.seed(1)
+  idx=sample(dim(undersampling_df)[1],round(nrow(undersampling_df)*0.75,0))
+  Train2=undersampling_df[idx,]
+  Test2=undersampling_df[-idx,]
+```
+
+```{r}
+table_2 = as.table(table(Train2$y))
+prop.table(table_2)
+```
+
+
+Model fitting:
+
+(1) LDA
+
+(1-a) Original split
+
+(1-a-1) Full model
+```{r}
+lda.fit1<-lda(y~., data=Train1)
+lda.fit1
+```
+
+```{r}
+plot(lda.fit1)
+```
+Testing,
+```{r}
+lda.pred1=predict(lda.fit1, Test1)
+table(lda.pred1$class, Test1$y)
+```
+```{r}
+paste('Accuracy rate for full LDA model: ', 100-round(100*mean(lda.pred1$class!=Test1$y),2),'%',sep='')
+```
+
+
+(2-a-2) Reduced model
+
+Reducing models based on positive discriminant values
+
+```{r}
+lda.fit.2<-lda(y~age+marital+education+balance+day+month+duration+previous+poutcome, data=Train1)
+lda.fit.2
+```
+
+```{r}
+plot(lda.fit.2)
+```
+
+
+Testing,
+```{r}
+lda.pred.2=predict(lda.fit.2, Test1)
+table(lda.pred.2$class, Test1$y)
+```
+
+```{r}
+paste('Misclassification rate for reduced LDA model: ', 100-round(100*mean(lda.pred.2$class!=Test1$y),2),'%',sep='')
+```
+
+(1-a-3) Best model from above with stratified k-folds
+
+Creating folds
+```{r}
+folds1 = createFolds(factor(banking_marketing_dataset$y), k=10)
+```
+
+Selecting reduced model because both full and reduced models have similar accuracies but reduced model is simpler because of less number of variables.
+
+```{r}
+misclassification_lda<-function(idx){
+  Train<-banking_marketing_dataset[-idx,]
+  Test<-banking_marketing_dataset[idx,]
+  fit<-lda(y~age+marital+education+balance+day+month+duration+previous+poutcome, data=Train)
+  pred<-predict(fit,Test)
+  return(mean(pred$class==Test$y))
+}
+```
+
+```{r}
+mis_rate1 = lapply(folds1, misclassification_lda)
+mis_rate1
+```
+
+```{r}
+paste('Accuracy rate for full LDA model: ', round(100*mean(as.numeric(mis_rate1)),2),'%',sep='')
+```
+
+(1-b) Undersampled split
+
+(1-b-1) Full model
+```{r}
+lda.fit1<-lda(y~., data=Train2)
+lda.fit1
+```
+
+```{r}
+plot(lda.fit1)
+```
+
+```{r}
+lda.pred1=predict(lda.fit1, Test2)
+table(lda.pred1$class, Test2$y)
+```
+
+```{r}
+paste('Misclassification rate for full LDA model: ', 100-round(100*mean(lda.pred1$class!=Test2$y),2),'%',sep='')
+```
+
+
+(1-b-2) Reduced Model
+
+Reducing model based on positive discriminant values
+
+```{r}
+lda.fit.2<-lda(y~age+marital+education+default+balance+day+month+duration+previous+poutcome, data=Train2)
+lda.fit.2
+```
+
+```{r}
+plot(lda.fit.2)
+```
+
+```{r}
+lda.pred2=predict(lda.fit.2, Test2)
+table(lda.pred2$class, Test2$y)
+```
+
+```{r}
+paste('Misclassification rate for reduced LDA model: ', 100-round(100*mean(lda.pred2$class!=Test2$y),2),'%',sep='')
+```
+
+(1-b-3) Stratified k-fold
+
+Creating folds
+```{r}
+folds2 = createFolds(factor(undersampling_df$y), k=10)
+```
+
+Selecting full model as it has better accuracy from above.
+
+```{r}
+misclassification_lda_2<-function(idx){
+  Train<-undersampling_df[-idx,]
+  Test<-undersampling_df[idx,]
+  fit<-lda(y~., data=Train)
+  pred<-predict(fit,Test2)
+  return(mean(pred$class==Test2$y))
+}
+```
+
+```{r}
+mis_rate2 = lapply(folds2, misclassification_lda_2)
+mis_rate2
+```
+
+```{r}
+paste('Accuracy rate for full LDA model: ', round(100*mean(as.numeric(mis_rate2)),2),'%',sep='')
+```
+
+(2) QDA
+
+(2-a) Original Split
+
+(2-a-1) Full model
+
+```{r}
+qda.fit.1<-qda(y~., data=Train1)
+qda.fit.1
+```
+
+```{r}
+qda.pred.1=predict(qda.fit.1, Test1)
+table(qda.pred.1$class, Test1$y)
+```
+
+```{r}
+paste('Misclassification rate for full QDA model: ', 100-round(100*mean(qda.pred.1$class!=Test1$y),2),'%',sep='')
+```
+
+(2-a-2) Stratified k-fold
+
+Creating folds
+```{r}
+folds.qda = createFolds(factor(banking_marketing_dataset$y), k=10)
+```
+
+```{r}
+misclassification_qda_1<-function(idx){
+  Train<-banking_marketing_dataset[-idx,]
+  Test<-banking_marketing_dataset[idx,]
+  fit<-qda(y~., data=Train)
+  pred<-predict(fit,Test)
+  return(mean(pred$class==Test$y))
+}
+```
+
+```{r}
+mis_rate_qda = lapply(folds.qda, misclassification_qda_1)
+mis_rate_qda
+```
+
+```{r}
+paste('Accuracy rate for k-fold QDA model: ', round(100*mean(as.numeric(mis_rate_qda)),2),'%',sep='')
+```
+
+(2-b) Undersampled split
+
+(2-b-1) Full model
+
+```{r}
+qda.fit.2<-qda(y~., data=Train2)
+qda.fit.2
+```
+
+```{r}
+qda.pred.2=predict(qda.fit.2, Test2)
+table(qda.pred.2$class, Test2$y)
+```
+
+```{r}
+paste('Misclassification rate for full QDA model: ', 100-round(100*mean(qda.pred.2$class!=Test2$y),2),'%',sep='')
+```
+
+(2-b-2) Stratified k-folds
+
+Creating folds
+```{r}
+folds.qda.2 = createFolds(factor(undersampling_df$y), k=10)
+```
+
+```{r}
+misclassification_qda_2<-function(idx){
+  Train<-undersampling_df[-idx,]
+  Test<-undersampling_df[idx,]
+  fit<-qda(y~., data=Train)
+  pred<-predict(fit,Test)
+  return(mean(pred$class==Test$y))
+}
+```
+
+```{r}
+mis_rate_qda_2 = lapply(folds.qda.2, misclassification_qda_2)
+mis_rate_qda_2
+```
+
+```{r}
+paste('Accuracy rate for k-fold QDA model: ', round(100*mean(as.numeric(mis_rate_qda_2)),2),'%',sep='')
+```
+
+(3) Logistics Regression
+
+(3-a) Original Split
+
+(3-a-1) Full logistic model
+
+```{r}
+logistic.fit.1<-glm(factor(y)~., family = binomial, data = Train1)
+summary(logistic.fit.1)
+```
+
+```{r}
+Prob.predict.1<-predict(logistic.fit.1, Test1, type="response")
+Predict<-rep("no",dim(Test1)[1])
+Predict[Prob.predict.1>=0.5]="yes"
+Actual<-Test1$y
+table(Predict, Actual)
+```
+
+```{r}
+paste('Accuracy rate for full logistic model: ', 100-round(100*mean(Predict!=Actual),2),'%',sep='' )
+```
+
+(3-a-2) Reduced logistic model
+
+```{r}
+logistic.fit.reduced.1<-glm(factor(y)~job+marital+education+housing+loan+contact+day+month+duration+campaign+poutcome, family = binomial, data = Train1)
+summary(logistic.fit.reduced.1)
+```
+
+```{r}
+Prob.predict.reduced.1<-predict(logistic.fit.reduced.1, Test1, type="response")
+Predict<-rep("no",dim(Test1)[1])
+Predict[Prob.predict.reduced.1>=0.5]="yes"
+Actual<-Test1$y
+table(Predict, Actual)
+```
+
+```{r}
+paste('Accuracy rate for full logistic model: ', 100-round(100*mean(Predict!=Actual),2),'%',sep='' )
+```
+
+(3-b-3) Straitified k-fold
+
+Creating folds,
+```{r}
+folds.log.1 = createFolds(factor(banking_marketing_dataset$y), k=10)
+```
+
+```{r}
+misclassification_log_1<-function(idx){
+  Train<-banking_marketing_dataset[-idx,]
+  Test<-banking_marketing_dataset[idx,]
+  logistic.fit<-glm(factor(y)~job+marital+education+housing+loan+contact+day+month+duration+campaign+poutcome, family = binomial, data = Train)  
+  accuracy = calc_misclass_log_1(logistic.fit, Test)
+  return(accuracy)
+}
+```
+
+```{r}
+calc_misclass_log_1<-function(model,Test){
+  Prob.predict<-predict(model, Test, type="response")
+  Predict<-rep("no",dim(Test)[1])
+  Predict[Prob.predict>=0.5]="yes"
+  Actual<-Test$y
+  #table(Predict, Actual)
+  accuracy = 100-round(100*mean(Predict!=Actual),2)
+  paste('Accuracy rate for logistic model fold: ', accuracy,'%',sep='' )
+  return(accuracy)
+}
+```
+
+```{r}
+mis_rate_log_1 = lapply(folds.log.1, misclassification_log_1)
+mis_rate_log_1
+```
+
+```{r}
+paste('Accuracy rate for k-fold logistic model: ', round(mean(as.numeric(mis_rate_log_1)),2),'%',sep='')
+```
+
+
+(3-b) Undersampled split
+
+(3-b-1) Full model
+
+```{r}
+logistic.fit.2<-glm(factor(y)~., family = binomial, data = Train2)
+summary(logistic.fit.2)
+```
+
+```{r}
+Prob.predict.2<-predict(logistic.fit.2, Test2, type="response")
+Predict<-rep("no",dim(Test2)[1])
+Predict[Prob.predict.2>=0.5]="yes"
+Actual<-Test2$y
+table(Predict, Actual)
+```
+
+```{r}
+paste('Accuracy rate for full logistic model: ', 100-round(100*mean(Predict!=Actual),2),'%',sep='' )
+```
+
+(3-b-2) Reduced logistic model
+
+```{r}
+logistic.fit.reduced.2<-glm(factor(y)~job+education+balance+housing+loan+contact+month+duration+campaign+poutcome, family = binomial, data = Train2)
+summary(logistic.fit.reduced.2)
+```
+
+```{r}
+Prob.predict.reduced.2<-predict(logistic.fit.reduced.2, Test2, type="response")
+Predict<-rep("no",dim(Test2)[1])
+Predict[Prob.predict.reduced.2>=0.5]="yes"
+Actual<-Test2$y
+table(Predict, Actual)
+```
+
+```{r}
+paste('Accuracy rate for reduced logistic model: ', 100-round(100*mean(Predict!=Actual),2),'%',sep='' )
+```
+
+(3-b-3) Stratified k-fold
+
+Creating folds
+
+```{r}
+folds.log.2 = createFolds(factor(undersampling_df$y), k=10)
+```
+
+```{r}
+misclassification_log_2<-function(idx){
+  Train<-undersampling_df[-idx,]
+  Test<-undersampling_df[idx,]
+  logistic.fit<-glm(factor(y)~job+education+balance+housing+loan+contact+month+duration+campaign+poutcome, family = binomial, data = Train)  
+  accuracy = calc_misclass_log_2(logistic.fit, Test)
+  return(accuracy)
+}
+```
+
+```{r}
+calc_misclass_log_2<-function(model,Test){
+  Prob.predict<-predict(model, Test, type="response")
+  Predict<-rep("no",dim(Test)[1])
+  Predict[Prob.predict>=0.5]="yes"
+  Actual<-Test$y
+  #table(Predict, Actual)
+  accuracy = 100-round(100*mean(Predict!=Actual),2)
+  paste('Accuracy rate for logistic model fold: ', accuracy,'%',sep='' )
+  return(accuracy)
+}
+```
+
+
+```{r}
+mis_rate_log_2 = lapply(folds.log.2, misclassification_log_2)
+mis_rate_log_2
+```
+
+```{r}
+paste('Accuracy rate for k-fold logistic model: ', round(mean(as.numeric(mis_rate_log_2)),2),'%',sep='')
+```
+
+
+
+
