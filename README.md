@@ -13,7 +13,7 @@ Our group's goal is to build a binary classification model with our data set to 
 
 The models that our group would use to determine if a person is more likely to sign up for term deposit is a Logistic Regression model due to its accuracy and its ease to interpret. The table below is sorted based on the magnitude that each independent variable has the dependent variable (whether someone will sign up for a term deposit). The variables that have a greater effect near the top. The variables that are highlighted in red have a negative effect on a persons decision.
 
-![Alt text](relative%20path/LR_Model_Summary.png?raw=true "Title")
+![Alt text](LR_Model_Summary.png?raw=true "Title")
 
 ## References
 
